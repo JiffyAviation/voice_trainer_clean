@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math' as math;
+import 'services/voice_analysis_service.dart';
 
 void main() {
   runApp(VoiceTrainerApp());
@@ -33,10 +34,14 @@ class _PitchDetectionScreenState extends State<PitchDetectionScreen>
   String _cachedNoteName = '--';
   Timer? _simulationTimer;
 
+  // Add the new voice analysis service
+  late VoiceAnalysisService _voiceService;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _voiceService = VoiceAnalysisService(); // Initialize the service
   }
 
   @override
@@ -110,6 +115,7 @@ class _PitchDetectionScreenState extends State<PitchDetectionScreen>
   void _updateFrequencyTo(double frequency) {
     // Only update if frequency changed significantly (optimization)
     if ((frequency - _currentFrequency).abs() > 0.5) {
+      // Use VoiceAnalysisService for note calculation (backward compatibility)
       final newNoteName = _calculateNoteName(frequency);
 
       setState(() {
@@ -119,7 +125,7 @@ class _PitchDetectionScreenState extends State<PitchDetectionScreen>
     }
   }
 
-  // Cache note name calculation to avoid repeated computation
+  // Keep the old note calculation for now (we'll replace this next)
   String _calculateNoteName(double frequency) {
     if (frequency < 80) return '--';
 
@@ -137,14 +143,19 @@ class _PitchDetectionScreenState extends State<PitchDetectionScreen>
       'A#',
       'B',
     ];
-    final a4 = 440.0;
 
-    if (frequency < 80 || frequency > 2000) return '--';
+    // Use C0 as reference (16.35 Hz)
+    final c0 = 16.351597831287414;
 
-    final semitonesFromA4 = (12 * (math.log(frequency / a4) / math.log(2)))
-        .round();
-    final noteIndex = (9 + semitonesFromA4) % 12;
-    final octave = 4 + ((9 + semitonesFromA4) ~/ 12);
+    // Calculate the note number from C0 using natural log
+    final noteNumber = (12 * (math.log(frequency / c0) / math.log(2))).round();
+
+    // Get note name and octave
+    final noteIndex = noteNumber % 12;
+    final octave = noteNumber ~/ 12;
+
+    // Handle edge cases
+    if (octave < 0 || octave > 9) return '--';
 
     return '${noteNames[noteIndex]}$octave';
   }
@@ -153,7 +164,7 @@ class _PitchDetectionScreenState extends State<PitchDetectionScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Voice Trainer Clean - Optimized!'),
+        title: Text('Voice Trainer Clean - With Analysis Service!'),
         backgroundColor: Colors.blue,
       ),
       body: Center(
@@ -170,7 +181,7 @@ class _PitchDetectionScreenState extends State<PitchDetectionScreen>
                 boxShadow: _isDetecting
                     ? [
                         BoxShadow(
-                          color: Colors.red.withOpacity(0.3),
+                          color: Colors.red.withValues(alpha: 0.3),
                           blurRadius: 10,
                           spreadRadius: 2,
                         ),

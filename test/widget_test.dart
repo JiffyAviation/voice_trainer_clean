@@ -3,15 +3,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/services/main.dart';
+import 'package:voice_trainer_clean/main.dart';
 
 void main() {
   testWidgets('Voice Trainer app loads correctly', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(VoiceTrainerApp());
+    await tester.pumpWidget(const VoiceTrainerApp());
 
     // Verify that our app title appears
-    expect(find.text('Voice Trainer Clean - Working!'), findsOneWidget);
+    expect(
+      find.text('Voice Trainer Clean - With Analysis Service!'),
+      findsOneWidget,
+    );
 
     // Verify that the frequency display starts at 0.0
     expect(find.text('0.0 Hz'), findsOneWidget);
@@ -27,7 +30,7 @@ void main() {
     WidgetTester tester,
   ) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(VoiceTrainerApp());
+    await tester.pumpWidget(const VoiceTrainerApp());
 
     // Tap the detection button
     await tester.tap(find.text('Start Detection'));
