@@ -1,17 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_pitch_detection/flutter_pitch_detection.dart';
-import 'package:pitch_detector_dart/pitch_detector_dart.dart';
 
 class SmartPitchService {
   bool _isDetecting = false;
   double _currentFrequency = 0.0;
   StreamController<double>? _frequencyController;
-
-  // Platform-specific detectors
-  FlutterPitchDetection? _androidDetector;
-  PitchDetector? _dartDetector;
+  Timer? _simulationTimer;
 
   bool get isDetecting => _isDetecting;
   double get currentFrequency => _currentFrequency;
@@ -23,15 +18,6 @@ class SmartPitchService {
 
   Future<bool> initialize() async {
     try {
-      if (Platform.isAndroid) {
-        // Use advanced Android detector
-        _androidDetector = FlutterPitchDetection();
-        await _androidDetector!.startDetection();
-      } else {
-        // Use cross-platform Dart detector
-        _dartDetector = PitchDetector(44100, 2000);
-      }
-
       if (kDebugMode) {
         print('SmartPitchService: Initialized for ${Platform.operatingSystem}');
       }
@@ -49,17 +35,7 @@ class SmartPitchService {
 
     try {
       _isDetecting = true;
-
-      if (Platform.isAndroid && _androidDetector != null) {
-        // Android: Use real-time stream
-        _androidDetector!.onPitchDetected.listen((data) {
-          final frequency = data['frequency'] as double? ?? 0.0;
-          _updateFrequency(frequency);
-        });
-      } else {
-        // Other platforms: Simulate for now (we'll add real detection later)
-        _simulateFrequencyDetection();
-      }
+      _simulateFrequencyDetection();
 
       if (kDebugMode) {
         print('SmartPitchService: Detection started');
@@ -76,11 +52,7 @@ class SmartPitchService {
 
   Future<void> stopDetection() async {
     _isDetecting = false;
-
-    if (Platform.isAndroid && _androidDetector != null) {
-      await _androidDetector!.stopDetection();
-    }
-
+    _simulationTimer?.cancel();
     _updateFrequency(0.0);
 
     if (kDebugMode) {
@@ -93,9 +65,8 @@ class SmartPitchService {
     _frequencyController?.add(frequency);
   }
 
-  // Temporary simulation for non-Android platforms
   void _simulateFrequencyDetection() {
-    Timer.periodic(Duration(milliseconds: 100), (timer) {
+    _simulationTimer = Timer.periodic(Duration(milliseconds: 100), (timer) {
       if (!_isDetecting) {
         timer.cancel();
         return;
@@ -113,6 +84,7 @@ class SmartPitchService {
 
   void dispose() {
     stopDetection();
+    _simulationTimer?.cancel();
     _frequencyController?.close();
   }
 }

@@ -1,30 +1,40 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// This is a basic Flutter widget test for the Voice Trainer app.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:voice_trainer_clean/main.dart';
+import '../lib/services/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+  testWidgets('Voice Trainer app loads correctly', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(VoiceTrainerApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Verify that our app title appears
+    expect(find.text('Voice Trainer Clean - Working!'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    // Verify that the frequency display starts at 0.0
+    expect(find.text('0.0 Hz'), findsOneWidget);
+
+    // Verify that the start button exists
+    expect(find.text('Start Detection'), findsOneWidget);
+
+    // Verify the microphone icon exists
+    expect(find.byIcon(Icons.mic), findsOneWidget);
+  });
+
+  testWidgets('Detection button toggles correctly', (
+    WidgetTester tester,
+  ) async {
+    // Build our app and trigger a frame.
+    await tester.pumpWidget(VoiceTrainerApp());
+
+    // Tap the detection button
+    await tester.tap(find.text('Start Detection'));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Verify button text changed
+    expect(find.text('Stop Detection'), findsOneWidget);
+    expect(find.text('Start Detection'), findsNothing);
   });
 }
