@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'services/voice_analysis_service.dart';
+import 'services/filters/formant_filter.dart';
 
 void main() {
   runApp(VoiceTrainerApp());
@@ -13,217 +15,367 @@ class VoiceTrainerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Voice Trainer Clean',
+      title: 'Voice Trainer MTF Pro',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: PitchDetectionScreen(),
+      home: VoiceAnalysisScreen(),
     );
   }
 }
 
-class PitchDetectionScreen extends StatefulWidget {
-  const PitchDetectionScreen({super.key});
+class VoiceAnalysisScreen extends StatefulWidget {
+  const VoiceAnalysisScreen({super.key});
 
   @override
-  State<PitchDetectionScreen> createState() => _PitchDetectionScreenState();
+  State<VoiceAnalysisScreen> createState() => _VoiceAnalysisScreenState();
 }
 
-class _PitchDetectionScreenState extends State<PitchDetectionScreen>
+class _VoiceAnalysisScreenState extends State<VoiceAnalysisScreen>
     with WidgetsBindingObserver {
-  bool _isDetecting = false;
-  double _currentFrequency = 0.0;
-  String _cachedNoteName = '--';
-  Timer? _simulationTimer;
+  bool _isAnalyzing = false;
+  Timer? _analysisTimer;
 
-  // Add the new voice analysis service
+  // Voice analysis service
   late VoiceAnalysisService _voiceService;
+
+  // Analysis results
+  Map<String, dynamic> _currentAnalysis = {
+    'frequency': 0.0,
+    'noteName': '--',
+    'formants': {'f1': 0.0, 'f2': 0.0, 'f3': 0.0},
+    'voiceCharacteristics': {'voiceType': 'Unknown', 'vowelHint': 'Unknown'},
+    'voiceQuality': {
+      'voiceQuality': 'Unknown',
+      'breathinessScore': 0,
+      'recommendation': 'No data',
+    },
+  };
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _voiceService = VoiceAnalysisService(); // Initialize the service
+    _voiceService = VoiceAnalysisService();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _simulationTimer?.cancel();
+    _analysisTimer?.cancel();
     super.dispose();
   }
 
-  // Pause updates when app is backgrounded
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused && _isDetecting) {
-      _pauseSimulation();
-    } else if (state == AppLifecycleState.resumed && _isDetecting) {
-      _resumeSimulation();
+    if (state == AppLifecycleState.paused && _isAnalyzing) {
+      _pauseAnalysis();
+    } else if (state == AppLifecycleState.resumed && _isAnalyzing) {
+      _resumeAnalysis();
     }
   }
 
-  Future<void> _toggleDetection() async {
+  Future<void> _toggleAnalysis() async {
     setState(() {
-      _isDetecting = !_isDetecting;
+      _isAnalyzing = !_isAnalyzing;
     });
 
-    if (_isDetecting) {
-      _startSimulation();
+    if (_isAnalyzing) {
+      _startAnalysis();
     } else {
-      _stopSimulation();
+      _stopAnalysis();
     }
   }
 
-  void _startSimulation() {
-    // Optimize: 60fps = ~16ms, but we don't need that fast for frequency
-    // Use 50ms (20fps) - smooth enough for frequency display
-    _simulationTimer = Timer.periodic(Duration(milliseconds: 50), (timer) {
-      if (!_isDetecting) {
+  void _startAnalysis() {
+    _analysisTimer = Timer.periodic(Duration(milliseconds: 200), (timer) {
+      if (!_isAnalyzing) {
         timer.cancel();
         return;
       }
-      _updateFrequency();
+      _performVoiceAnalysis();
     });
   }
 
-  void _pauseSimulation() {
-    _simulationTimer?.cancel();
+  void _pauseAnalysis() {
+    _analysisTimer?.cancel();
   }
 
-  void _resumeSimulation() {
-    if (_isDetecting) {
-      _startSimulation();
+  void _resumeAnalysis() {
+    if (_isAnalyzing) {
+      _startAnalysis();
     }
   }
 
-  void _stopSimulation() {
-    _simulationTimer?.cancel();
-    _updateFrequencyTo(0.0);
+  void _stopAnalysis() {
+    _analysisTimer?.cancel();
+    setState(() {
+      _currentAnalysis = {
+        'frequency': 0.0,
+        'noteName': '--',
+        'formants': {'f1': 0.0, 'f2': 0.0, 'f3': 0.0},
+        'voiceCharacteristics': {
+          'voiceType': 'Unknown',
+          'vowelHint': 'Unknown',
+        },
+        'voiceQuality': {
+          'voiceQuality': 'Unknown',
+          'breathinessScore': 0,
+          'recommendation': 'Ready for analysis',
+        },
+      };
+    });
   }
 
-  void _updateFrequency() {
-    // Simulate voice frequency variations around 200-400 Hz
-    final baseFreq = 300.0;
-    final time = DateTime.now().millisecondsSinceEpoch / 1000.0;
+  void _performVoiceAnalysis() {
+    // Generate realistic synthetic voice data for demo
+    final baseF1 =
+        300.0 + 50.0 * math.sin(DateTime.now().millisecondsSinceEpoch / 2000.0);
+    final baseF2 =
+        2100.0 +
+        200.0 * math.cos(DateTime.now().millisecondsSinceEpoch / 3000.0);
+    final baseF3 =
+        2800.0 +
+        100.0 * math.sin(DateTime.now().millisecondsSinceEpoch / 4000.0);
 
-    // More realistic voice-like variation using sine wave
-    final variation = 30.0 * math.sin(time * 2.0) + 15.0 * math.sin(time * 5.0);
-    final frequency = baseFreq + variation;
+    // Generate synthetic voice sample
+    final voiceData = FormantFilter.generateVowelSample(
+      f1: baseF1,
+      f2: baseF2,
+      f3: baseF3,
+      durationSeconds: 0.1,
+    );
 
-    _updateFrequencyTo(frequency);
-  }
+    // Perform full voice analysis
+    final analysis = _voiceService.analyzeVoice(voiceData);
 
-  void _updateFrequencyTo(double frequency) {
-    // Only update if frequency changed significantly (optimization)
-    if ((frequency - _currentFrequency).abs() > 0.5) {
-      // Use VoiceAnalysisService for note calculation (backward compatibility)
-      final newNoteName = _calculateNoteName(frequency);
-
-      setState(() {
-        _currentFrequency = frequency;
-        _cachedNoteName = newNoteName;
-      });
-    }
-  }
-
-  // Keep the old note calculation for now (we'll replace this next)
-  String _calculateNoteName(double frequency) {
-    if (frequency < 80) return '--';
-
-    final noteNames = [
-      'C',
-      'C#',
-      'D',
-      'D#',
-      'E',
-      'F',
-      'F#',
-      'G',
-      'G#',
-      'A',
-      'A#',
-      'B',
-    ];
-
-    // Use C0 as reference (16.35 Hz)
-    final c0 = 16.351597831287414;
-
-    // Calculate the note number from C0 using natural log
-    final noteNumber = (12 * (math.log(frequency / c0) / math.log(2))).round();
-
-    // Get note name and octave
-    final noteIndex = noteNumber % 12;
-    final octave = noteNumber ~/ 12;
-
-    // Handle edge cases
-    if (octave < 0 || octave > 9) return '--';
-
-    return '${noteNames[noteIndex]}$octave';
+    setState(() {
+      _currentAnalysis = analysis;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final frequency = _currentAnalysis['frequency'] as double;
+    final noteName = _currentAnalysis['noteName'] as String;
+    final formants = _currentAnalysis['formants'] as Map<String, dynamic>;
+    final voiceChar =
+        _currentAnalysis['voiceCharacteristics'] as Map<String, dynamic>;
+    final voiceQuality =
+        _currentAnalysis['voiceQuality'] as Map<String, dynamic>;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Voice Trainer Clean - With Analysis Service!'),
-        backgroundColor: Colors.blue,
+        title: Text('🎤 Voice Trainer MTF Pro'),
+        backgroundColor: Colors.purple.shade700,
+        foregroundColor: Colors.white,
       ),
-      body: Center(
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Microphone indicator
             Container(
-              width: 100,
-              height: 100,
+              width: 120,
+              height: 120,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _isDetecting ? Colors.red : Colors.grey,
-                boxShadow: _isDetecting
+                color: _isAnalyzing ? Colors.red : Colors.grey,
+                boxShadow: _isAnalyzing
                     ? [
                         BoxShadow(
                           color: Colors.red.withValues(alpha: 0.3),
-                          blurRadius: 10,
-                          spreadRadius: 2,
+                          blurRadius: 15,
+                          spreadRadius: 5,
                         ),
                       ]
                     : null,
               ),
-              child: Icon(Icons.mic, size: 50, color: Colors.white),
+              child: Icon(Icons.mic, size: 60, color: Colors.white),
             ),
 
-            SizedBox(height: 30),
+            SizedBox(height: 20),
 
-            // Frequency display
-            Text(
-              '${_currentFrequency.toStringAsFixed(1)} Hz',
-              style: TextStyle(
-                fontSize: 48,
-                fontWeight: FontWeight.bold,
-                color: _currentFrequency > 100 ? Colors.green : Colors.grey,
+            // Pitch Analysis Card
+            Card(
+              elevation: 4,
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    Text(
+                      '🎵 Pitch Analysis',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    Text(
+                      '${frequency.toStringAsFixed(1)} Hz',
+                      style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: frequency > 100 ? Colors.green : Colors.grey,
+                      ),
+                    ),
+                    Text(
+                      noteName,
+                      style: TextStyle(fontSize: 20, color: Colors.blue),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: 16),
+
+            // Formant Analysis Card
+            Card(
+              elevation: 4,
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '📊 Formant Analysis',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildFormantDisplay(
+                          'F1',
+                          formants['f1'] as double,
+                          Colors.red,
+                        ),
+                        _buildFormantDisplay(
+                          'F2',
+                          formants['f2'] as double,
+                          Colors.green,
+                        ),
+                        _buildFormantDisplay(
+                          'F3',
+                          formants['f3'] as double,
+                          Colors.blue,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: 16),
+
+            // Voice Characteristics Card
+            Card(
+              elevation: 4,
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '🗣️ Voice Characteristics',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    ListTile(
+                      leading: Icon(Icons.person, color: Colors.purple),
+                      title: Text('Voice Type'),
+                      subtitle: Text(voiceChar['voiceType'].toString()),
+                    ),
+                    ListTile(
+                      leading: Icon(
+                        Icons.record_voice_over,
+                        color: Colors.orange,
+                      ),
+                      title: Text('Vowel Character'),
+                      subtitle: Text(voiceChar['vowelHint'].toString()),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: 16),
+
+            // Voice Quality Card
+            Card(
+              elevation: 4,
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '💨 Voice Quality',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    ListTile(
+                      leading: Icon(Icons.air, color: Colors.lightBlue),
+                      title: Text('Quality'),
+                      subtitle: Text(voiceQuality['voiceQuality'].toString()),
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.trending_up, color: Colors.teal),
+                      title: Text('Breathiness Score'),
+                      subtitle: Text('${voiceQuality['breathinessScore']}%'),
+                    ),
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.lightbulb, color: Colors.amber),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              voiceQuality['recommendation'].toString(),
+                              style: TextStyle(fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
 
             SizedBox(height: 20),
 
-            // Note name (using cached value)
-            Text(
-              _cachedNoteName,
-              style: TextStyle(fontSize: 24, color: Colors.blue),
-            ),
-
-            SizedBox(height: 40),
-
             // Control button
             ElevatedButton(
-              onPressed: _toggleDetection,
+              onPressed: _toggleAnalysis,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isDetecting ? Colors.red : Colors.blue,
+                backgroundColor: _isAnalyzing
+                    ? Colors.red
+                    : Colors.purple.shade700,
+                foregroundColor: Colors.white,
                 padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                elevation: _isDetecting ? 8 : 4,
+                elevation: _isAnalyzing ? 8 : 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25),
+                ),
               ),
               child: Text(
-                _isDetecting ? 'Stop Detection' : 'Start Detection',
-                style: TextStyle(fontSize: 18, color: Colors.white),
+                _isAnalyzing ? '⏹️ Stop Analysis' : '▶️ Start Analysis',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
 
@@ -231,14 +383,34 @@ class _PitchDetectionScreenState extends State<PitchDetectionScreen>
 
             // Status text
             Text(
-              _isDetecting
-                  ? 'Simulating pitch detection...'
-                  : 'Ready to simulate',
+              _isAnalyzing
+                  ? '🔍 Analyzing voice patterns...'
+                  : '📱 Ready for voice analysis',
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFormantDisplay(String label, double value, Color color) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          value > 0 ? '${value.round()} Hz' : '--',
+          style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+        ),
+      ],
     );
   }
 }
